@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "claude-plugins-young1ll",
+  "description": "Personal Claude Code plugins by young1ll",
+  "owner": {
+    "name": "young1ll"
+  },
+  "plugins": [
+    {
+      "name": "pm",
+      "description": "Project documentation management and workflow orchestration. PROJECT.yaml-based systematic document management, milestone tracking, and automated validation.",
+      "version": "1.0.0",
+      "author": {
+        "name": "young1ll"
+      },
+      "source": "./plugins/pm",
+      "category": "productivity",
+      "homepage": "https://github.com/young1ll/claude-plugins-young1ll/tree/main/plugins/pm"
+    }
+  ]
+}

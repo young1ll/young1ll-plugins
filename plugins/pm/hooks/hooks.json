@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "matcher": {
+        "tool_name": "Write|Edit",
+        "file_paths": ["**/MILESTONES.md"]
+      },
+      "hooks": [
+        {
+          "type": "command",
+          "command": "echo '📊 MILESTONES.md가 수정되었습니다. /pm:sync로 진행률을 동기화하세요.'",
+          "timeout": 5000
+        }
+      ]
+    }
+  ]
+}

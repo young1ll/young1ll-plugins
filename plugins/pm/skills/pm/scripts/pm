@@ -1,0 +1,1024 @@
+#!/bin/bash
+# pm - Project Management CLI
+# 프로젝트 문서 관리 통합 도구
+
+set -e
+
+# 스크립트 디렉토리 경로
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# 라이브러리 로드
+source "$SCRIPT_DIR/lib/common.sh"
+source "$SCRIPT_DIR/lib/yaml-parser.sh"
+
+# ============================================================
+# pm help - 도움말
+# ============================================================
+
+pm_help() {
+  local VERSION="1.0.0"
+
+  # 추가 색상 정의
+  local DIM='\033[2m'
+  local MAGENTA='\033[0;35m'
+  local WHITE='\033[1;37m'
+
+  echo ""
+  echo -e "${BOLD}${CYAN}  ╭─────────────────────────────────────────────────────╮${NC}"
+  echo -e "${BOLD}${CYAN}  │${NC}  ${WHITE}pm${NC} ${DIM}— Project Management CLI${NC}            ${DIM}v${VERSION}${NC}  ${BOLD}${CYAN}│${NC}"
+  echo -e "${BOLD}${CYAN}  ╰─────────────────────────────────────────────────────╯${NC}"
+  echo ""
+
+  echo -e "${BOLD}${WHITE}  USAGE${NC}"
+  echo -e "    ${CYAN}pm${NC} ${DIM}<command>${NC} ${DIM}[options]${NC}"
+  echo ""
+
+  echo -e "${BOLD}${WHITE}  COMMANDS${NC}"
+  echo ""
+  echo -e "    ${GREEN}init${NC}              새 프로젝트 문서 체계 초기화"
+  echo -e "    ${GREEN}adopt${NC}             기존 프로젝트에 문서 체계 도입 ${DIM}(코드 분석)${NC}"
+  echo -e "    ${CYAN}status${NC}            마일스톤 진행률 + 문서 상태 확인"
+  echo -e "    ${CYAN}validate${NC}          프로젝트 전체 검증 ${DIM}(6가지 항목)${NC}"
+  echo -e "    ${YELLOW}new-plan${NC} ${DIM}<name>${NC}   계획 문서 생성"
+  echo -e "    ${YELLOW}new-report${NC} ${DIM}<topic>${NC} 보고서 생성"
+  echo -e "    ${BLUE}sync${NC}              MILESTONES 진행률 동기화"
+  echo -e "    ${DIM}help${NC}              이 도움말 표시"
+  echo ""
+
+  echo -e "${BOLD}${WHITE}  EXAMPLES${NC}"
+  echo ""
+  echo -e "    ${DIM}# 새 프로젝트 시작${NC}"
+  echo -e "    ${CYAN}pm init${NC}"
+  echo ""
+  echo -e "    ${DIM}# 기존 프로젝트에 도입${NC}"
+  echo -e "    ${CYAN}pm adopt${NC}"
+  echo ""
+  echo -e "    ${DIM}# 진행 상황 확인${NC}"
+  echo -e "    ${CYAN}pm status${NC}"
+  echo ""
+  echo -e "    ${DIM}# 계획 문서 생성${NC}"
+  echo -e "    ${CYAN}pm new-plan${NC} user-authentication"
+  echo ""
+
+  echo -e "${BOLD}${WHITE}  CLAUDE CODE${NC}"
+  echo ""
+  echo -e "    ${MAGENTA}/pm${NC}               스킬 호출"
+  echo -e "    ${MAGENTA}/pm init${NC}          새 프로젝트 초기화"
+  echo -e "    ${MAGENTA}/pm adopt${NC}         기존 프로젝트 도입"
+  echo -e "    ${MAGENTA}/pm status${NC}        진행 상황 확인"
+  echo ""
+
+  echo -e "${DIM}  ─────────────────────────────────────────────────────${NC}"
+  echo -e "${DIM}  Learn more: ~/.claude/skills/pm/SKILL.md${NC}"
+  echo ""
+}
+
+# ============================================================
+# pm init - 프로젝트 초기화
+# ============================================================
+
+pm_init() {
+  pm_header "Project Initialization"
+
+  if [ -f "PROJECT.yaml" ]; then
+    pm_warn "PROJECT.yaml이 이미 존재합니다"
+    if ! confirm "덮어쓰시겠습니까?"; then
+      pm_info "초기화 취소됨"
+      exit 0
+    fi
+  fi
+
+  pm_info "프로젝트 정보를 입력하세요"
+  echo ""
+
+  # 프로젝트 이름
+  read -r -p "프로젝트 이름: " project_name
+  project_name=${project_name:-my-project}
+
+  # 프로젝트 설명
+  read -r -p "프로젝트 설명: " project_desc
+  project_desc=${project_desc:-프로젝트 설명}
+
+  # 문서 디렉토리
+  read -r -p "계획 문서 디렉토리 [docs/plans]: " plans_dir
+  plans_dir=${plans_dir:-docs/plans}
+
+  read -r -p "보고서 디렉토리 [docs/reports]: " reports_dir
+  reports_dir=${reports_dir:-docs/reports}
+
+  echo ""
+  pm_info "PROJECT.yaml 생성 중..."
+
+  cat > PROJECT.yaml << EOF
+name: $project_name
+description: $project_desc
+
+core_docs:
+  vision: MANIFESTO.md
+  progress: MILESTONES.md
+
+plans_dir: $plans_dir
+reports_dir: $reports_dir
+
+meta:
+  created: $(get_date)
+EOF
+
+  pm_success "PROJECT.yaml 생성 완료"
+
+  # 필수 문서 생성
+  pm_info "필수 문서 생성 중..."
+
+  # MANIFESTO.md
+  if [ ! -f "MANIFESTO.md" ]; then
+    if [ -f "$TEMPLATES_DIR/MANIFESTO.md.tpl" ]; then
+      cp "$TEMPLATES_DIR/MANIFESTO.md.tpl" MANIFESTO.md
+    else
+      cat > MANIFESTO.md << 'EOF'
+# Project Manifesto
+
+## Vision
+[프로젝트가 달성하고자 하는 최종 목표]
+
+## Core Values
+1. **[가치]**: [설명]
+
+## Success Criteria
+- [성공 기준]
+
+## Non-Goals
+- [하지 않을 것]
+
+## Principles
+- [원칙]
+EOF
+    fi
+    pm_success "MANIFESTO.md 생성"
+  else
+    pm_info "MANIFESTO.md 이미 존재"
+  fi
+
+  # MILESTONES.md
+  if [ ! -f "MILESTONES.md" ]; then
+    if [ -f "$TEMPLATES_DIR/MILESTONES.md.tpl" ]; then
+      cp "$TEMPLATES_DIR/MILESTONES.md.tpl" MILESTONES.md
+    else
+      cat > MILESTONES.md << EOF
+# Milestones
+
+> Last updated: $(get_date)
+
+## Current: v0.1.0
+> Target: TBD | Progress: 0%
+
+### Goals
+- [목표]
+
+### Tasks
+- [ ] Task
+
+### Blockers
+- None
+
+---
+
+## Next: v0.2.0
+
+---
+
+## Completed
+EOF
+    fi
+    pm_success "MILESTONES.md 생성"
+  else
+    pm_info "MILESTONES.md 이미 존재"
+  fi
+
+  # 디렉토리 생성
+  ensure_dir "$plans_dir"
+  ensure_dir "$reports_dir"
+
+  echo ""
+  pm_header "초기화 완료"
+  pm_info "다음 단계:"
+  echo "  1. MANIFESTO.md 편집 - 프로젝트 비전 정의"
+  echo "  2. MILESTONES.md 편집 - 목표 및 태스크 정의"
+  echo "  3. pm status - 진행 상황 확인"
+}
+
+# ============================================================
+# pm adopt - 기존 프로젝트 분석 및 도입
+# ============================================================
+
+pm_adopt() {
+  pm_header "Project Adoption (기존 프로젝트 분석)"
+
+  if [ -f "PROJECT.yaml" ]; then
+    pm_warn "PROJECT.yaml이 이미 존재합니다"
+    if ! confirm "덮어쓰시겠습니까?"; then
+      pm_info "도입 취소됨"
+      exit 0
+    fi
+  fi
+
+  pm_info "코드베이스 분석 중..."
+  echo ""
+
+  # 프로젝트 유형 감지
+  local project_type="unknown"
+  local detected_stack=""
+  local suggested_docs=""
+
+  # Node.js 프로젝트
+  if [ -f "package.json" ]; then
+    detected_stack="Node.js"
+    if grep -q "react\|vue\|next\|nuxt" package.json 2>/dev/null; then
+      project_type="frontend"
+      suggested_docs="architecture, components"
+    elif grep -q "express\|fastify\|nestjs\|koa" package.json 2>/dev/null; then
+      project_type="backend"
+      suggested_docs="api_spec, domain_model, decisions"
+    fi
+  fi
+
+  # Python 프로젝트
+  if [ -f "pyproject.toml" ] || [ -f "requirements.txt" ]; then
+    detected_stack="Python"
+    if grep -qE "torch|tensorflow|keras|wandb|mlflow" pyproject.toml requirements.txt 2>/dev/null; then
+      project_type="ml"
+      suggested_docs="experiments, metrics, data_schema, architecture"
+    elif grep -qE "fastapi|flask|django" pyproject.toml requirements.txt 2>/dev/null; then
+      project_type="backend"
+      suggested_docs="api_spec, domain_model, decisions"
+    fi
+  fi
+
+  # Go 프로젝트
+  if [ -f "go.mod" ]; then
+    detected_stack="Go"
+    project_type="backend"
+    suggested_docs="api_spec, architecture, decisions"
+  fi
+
+  # Rust 프로젝트
+  if [ -f "Cargo.toml" ]; then
+    detected_stack="Rust"
+    project_type="library"
+    suggested_docs="api_spec, architecture, decisions"
+  fi
+
+  # 디렉토리 구조 분석
+  local has_models=false
+  local has_data=false
+  local has_api=false
+  local has_migrations=false
+  local has_experiments=false
+
+  [ -d "models" ] || [ -d "src/models" ] && has_models=true
+  [ -d "data" ] || [ -d "datasets" ] && has_data=true
+  [ -d "api" ] || [ -d "src/api" ] || [ -d "routes" ] && has_api=true
+  [ -d "migrations" ] && has_migrations=true
+  [ -d "experiments" ] && has_experiments=true
+
+  # 기존 문서 확인
+  local existing_docs=""
+  [ -f "README.md" ] && existing_docs="$existing_docs README.md"
+  [ -d "docs" ] && existing_docs="$existing_docs docs/"
+
+  # 결과 출력
+  echo -e "${BOLD}[분석 결과]${NC}"
+  echo "  스택: $detected_stack"
+  echo "  유형: $project_type"
+  echo "  기존 문서: ${existing_docs:-없음}"
+  echo ""
+
+  echo -e "${BOLD}[디렉토리 구조]${NC}"
+  $has_models && echo "  + models/ → architecture 권장"
+  $has_data && echo "  + data/ → data_schema 권장"
+  $has_api && echo "  + api/ → api_spec 권장"
+  $has_migrations && echo "  + migrations/ → domain_model 권장"
+  $has_experiments && echo "  + experiments/ → experiments 권장"
+  echo ""
+
+  echo -e "${BOLD}[제안 core_docs]${NC}"
+  echo "  vision: MANIFESTO.md"
+  echo "  progress: MILESTONES.md"
+  [ -n "$suggested_docs" ] && echo "  추가 권장: $suggested_docs"
+  echo ""
+
+  pm_info "Claude Code에서 '/pm adopt' 실행 시 더 상세한 분석과 대화형 설정이 가능합니다."
+  echo ""
+
+  if ! confirm "기본 구조로 PROJECT.yaml을 생성하시겠습니까?"; then
+    pm_info "도입 취소됨. Claude Code에서 '/pm adopt'를 사용해 상세 설정하세요."
+    exit 0
+  fi
+
+  # 프로젝트 이름 추론
+  local project_name
+  project_name=$(basename "$PWD")
+
+  # 기본 PROJECT.yaml 생성
+  cat > PROJECT.yaml << EOF
+name: $project_name
+description: (설명을 추가하세요)
+
+core_docs:
+  vision: MANIFESTO.md
+  progress: MILESTONES.md
+
+plans_dir: docs/plans
+reports_dir: docs/reports
+
+meta:
+  stack: [$detected_stack]
+  type: $project_type
+  adopted: $(get_date)
+EOF
+
+  pm_success "PROJECT.yaml 생성 완료"
+
+  # 필수 문서 생성 (기존 문서 보존)
+  if [ ! -f "MANIFESTO.md" ]; then
+    if [ -f "README.md" ]; then
+      pm_info "README.md를 기반으로 MANIFESTO.md 생성..."
+      echo "# Project Manifesto" > MANIFESTO.md
+      echo "" >> MANIFESTO.md
+      echo "> 이 문서는 README.md를 기반으로 생성되었습니다. 편집해주세요." >> MANIFESTO.md
+      echo "" >> MANIFESTO.md
+      cat README.md >> MANIFESTO.md
+    else
+      cp "$TEMPLATES_DIR/MANIFESTO.md.tpl" MANIFESTO.md 2>/dev/null || cat > MANIFESTO.md << 'EOF'
+# Project Manifesto
+
+## Vision
+[프로젝트가 달성하고자 하는 최종 목표]
+
+## Core Values
+1. **[가치]**: [설명]
+
+## Success Criteria
+- [성공 기준]
+EOF
+    fi
+    pm_success "MANIFESTO.md 생성"
+  fi
+
+  if [ ! -f "MILESTONES.md" ]; then
+    cat > MILESTONES.md << EOF
+# Milestones
+
+> Last updated: $(get_date)
+> Adopted from existing project
+
+## Current: v1.0.0
+> Target: TBD | Progress: 0%
+
+### Goals
+- [기존 프로젝트 문서화 완료]
+
+### Tasks
+- [ ] MANIFESTO.md 편집
+- [ ] core_docs 추가 (필요시)
+- [ ] 마일스톤 정의
+
+### Blockers
+- None
+
+---
+
+## Completed
+EOF
+    pm_success "MILESTONES.md 생성"
+  fi
+
+  ensure_dir "docs/plans"
+  ensure_dir "docs/reports"
+
+  echo ""
+  pm_header "도입 완료"
+  pm_info "다음 단계:"
+  echo "  1. MANIFESTO.md 편집 - 프로젝트 비전 정의"
+  echo "  2. PROJECT.yaml 편집 - 추가 core_docs 설정"
+  echo "  3. pm status - 진행 상황 확인"
+}
+
+# ============================================================
+# pm status - 진행 상황 확인
+# ============================================================
+
+pm_status() {
+  require_project_yaml
+
+  pm_header "Project Status"
+
+  # 프로젝트 정보
+  local project_name
+  project_name=$(yaml_project_name)
+  echo -e "${BOLD}Project:${NC} $project_name"
+  echo ""
+
+  # MILESTONES.md 파싱
+  local milestones_file
+  milestones_file=$(yaml_get_core_doc "progress")
+  milestones_file=${milestones_file:-MILESTONES.md}
+
+  if [ ! -f "$milestones_file" ]; then
+    pm_warn "마일스톤 파일을 찾을 수 없음: $milestones_file"
+    return 1
+  fi
+
+  # 현재 마일스톤 추출
+  local current_section
+  current_section=$(awk '/^## Current:/,/^---$/' "$milestones_file")
+
+  # 마일스톤 이름
+  local milestone_name
+  milestone_name=$(echo "$current_section" | grep '## Current:' | sed 's/## Current:[[:space:]]*//')
+  echo -e "${CYAN}Current Milestone:${NC} $milestone_name"
+  echo ""
+
+  # 태스크 카운트
+  local total completed remaining
+  total=$(echo "$current_section" | grep -c '\- \[.\]' || echo "0")
+  completed=$(echo "$current_section" | grep -c '\- \[x\]' || echo "0")
+  remaining=$((total - completed))
+
+  echo "Tasks: $completed/$total completed"
+  progress_bar "$completed" "$total"
+
+  if [ "$remaining" -gt 0 ]; then
+    echo ""
+    echo "Remaining:"
+    echo "$current_section" | grep '\- \[ \]' | sed 's/- \[ \]/  -/'
+  fi
+
+  # 문서 상태
+  echo ""
+  pm_header "Document Status"
+
+  local core_docs
+  core_docs=$(yaml_get_core_docs)
+
+  while IFS=':' read -r role path; do
+    [ -z "$role" ] && continue
+    if [ -f "$path" ]; then
+      local modified
+      modified=$(stat -f "%Sm" -t "%Y-%m-%d" "$path" 2>/dev/null || stat -c "%y" "$path" 2>/dev/null | cut -d' ' -f1)
+      echo -e "  ${GREEN}+${NC} $role: $path (${modified})"
+    else
+      echo -e "  ${RED}-${NC} $role: $path (missing)"
+    fi
+  done <<< "$core_docs"
+}
+
+# ============================================================
+# pm validate - 포괄적 프로젝트 검증
+# ============================================================
+
+# 검증 결과 카운터
+VALIDATE_ERRORS=0
+VALIDATE_WARNINGS=0
+VALIDATE_PASSED=0
+
+validate_pass() {
+  echo -e "  ${GREEN}✓${NC} $*"
+  VALIDATE_PASSED=$((VALIDATE_PASSED + 1))
+}
+
+validate_warn() {
+  echo -e "  ${YELLOW}⚠${NC} $*"
+  VALIDATE_WARNINGS=$((VALIDATE_WARNINGS + 1))
+}
+
+validate_fail() {
+  echo -e "  ${RED}✗${NC} $*"
+  VALIDATE_ERRORS=$((VALIDATE_ERRORS + 1))
+}
+
+validate_info() {
+  echo -e "  ${CYAN}ℹ${NC} $*"
+}
+
+pm_validate() {
+  require_project_yaml
+
+  local project_name
+  project_name=$(yaml_project_name)
+
+  echo ""
+  echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo -e "${BOLD}  🔍 PM Validate — $project_name${NC}"
+  echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo ""
+
+  # ============================================================
+  # 1. 구조 검증 (Structure)
+  # ============================================================
+  echo -e "${BOLD}📁 1. 구조 검증${NC}"
+
+  # PROJECT.yaml 필수 필드
+  if [ -n "$(yaml_get 'name')" ]; then
+    validate_pass "PROJECT.yaml: name 필드 존재"
+  else
+    validate_fail "PROJECT.yaml: name 필드 누락"
+  fi
+
+  if [ -n "$(yaml_get_core_doc 'vision')" ]; then
+    validate_pass "core_docs: vision 정의됨"
+  else
+    validate_fail "core_docs: vision 필수 (MANIFESTO.md)"
+  fi
+
+  if [ -n "$(yaml_get_core_doc 'progress')" ]; then
+    validate_pass "core_docs: progress 정의됨"
+  else
+    validate_fail "core_docs: progress 필수 (MILESTONES.md)"
+  fi
+
+  local plans_dir reports_dir
+  plans_dir=$(yaml_plans_dir)
+  reports_dir=$(yaml_reports_dir)
+
+  [ -d "$plans_dir" ] && validate_pass "plans_dir: $plans_dir" || validate_warn "plans_dir: $plans_dir (없음)"
+  [ -d "$reports_dir" ] && validate_pass "reports_dir: $reports_dir" || validate_warn "reports_dir: $reports_dir (없음)"
+
+  echo ""
+
+  # ============================================================
+  # 2. 문서 존재 검증 (Existence)
+  # ============================================================
+  echo -e "${BOLD}📄 2. 문서 존재 검증${NC}"
+
+  local core_docs
+  core_docs=$(yaml_get_core_docs)
+
+  while IFS=':' read -r role path; do
+    [ -z "$role" ] && continue
+    if [ -f "$path" ]; then
+      validate_pass "$role: $path"
+    else
+      validate_fail "$role: $path (없음)"
+    fi
+  done <<< "$core_docs"
+
+  echo ""
+
+  # ============================================================
+  # 3. 문서 품질 검증 (Quality)
+  # ============================================================
+  echo -e "${BOLD}📝 3. 문서 품질 검증${NC}"
+
+  while IFS=':' read -r role path; do
+    [ -z "$role" ] && continue
+    [ ! -f "$path" ] && continue
+
+    # 파일 크기 확인 (너무 작으면 경고)
+    local size
+    size=$(wc -c < "$path" | tr -d ' ')
+    if [ "$size" -lt 100 ]; then
+      validate_warn "$path: 내용이 너무 적음 (${size}bytes)"
+    fi
+
+    # 템플릿 플레이스홀더 확인
+    if grep -qE '\[프로젝트|설명\]|\[목표\]|\[가치\]|\[TBD\]|YYYY-MM-DD' "$path" 2>/dev/null; then
+      validate_warn "$path: 템플릿 플레이스홀더 남아있음"
+    fi
+
+    # 마지막 수정일 확인 (30일 이상이면 경고)
+    local mod_time now_time diff_days
+    if [ "$OS_TYPE" = "macos" ]; then
+      mod_time=$(stat -f "%m" "$path" 2>/dev/null)
+      now_time=$(date +%s)
+    else
+      mod_time=$(stat -c "%Y" "$path" 2>/dev/null)
+      now_time=$(date +%s)
+    fi
+
+    if [ -n "$mod_time" ]; then
+      diff_days=$(( (now_time - mod_time) / 86400 ))
+      if [ "$diff_days" -gt 30 ]; then
+        # ignore 규칙 및 파일 패턴 체크
+        if ! is_ignored_rule "stale_documents" && ! is_ignored_file "$path"; then
+          validate_warn "$path: ${diff_days}일 전 마지막 수정"
+        fi
+      fi
+    fi
+
+  done <<< "$core_docs"
+
+  # MILESTONES.md 특별 검사
+  local milestones_file
+  milestones_file=$(yaml_get_core_doc "progress")
+  if [ -f "$milestones_file" ]; then
+    # 블로커 확인
+    if grep -q "^- [^N]" "$milestones_file" 2>/dev/null | grep -qi "blocker"; then
+      validate_warn "$milestones_file: 블로커가 존재함"
+    fi
+  fi
+
+  echo ""
+
+  # ============================================================
+  # 4. 일관성 검증 (Consistency)
+  # ============================================================
+  echo -e "${BOLD}🔗 4. 일관성 검증${NC}"
+
+  # 등록되지 않은 문서 파일 확인
+  local unregistered=0
+  local ignored_count=0
+  if [ -d "docs" ]; then
+    for doc_file in docs/*.md; do
+      [ ! -f "$doc_file" ] && continue
+
+      # ignore 파일 패턴 체크
+      if is_ignored_file "$doc_file"; then
+        ignored_count=$((ignored_count + 1))
+        continue
+      fi
+
+      local is_registered=false
+
+      while IFS=':' read -r role path; do
+        [ -z "$path" ] && continue
+        if [ "$path" = "$doc_file" ]; then
+          is_registered=true
+          break
+        fi
+      done <<< "$core_docs"
+
+      if [ "$is_registered" = false ]; then
+        # unregistered_docs 규칙이 무시되지 않은 경우에만 경고
+        if ! is_ignored_rule "unregistered_docs"; then
+          validate_info "$doc_file: core_docs에 미등록"
+          unregistered=$((unregistered + 1))
+        fi
+      fi
+    done
+  fi
+
+  if [ "$unregistered" -eq 0 ]; then
+    if [ "$ignored_count" -gt 0 ]; then
+      validate_pass "모든 docs/*.md 파일이 core_docs에 등록됨 (${ignored_count}개 무시됨)"
+    else
+      validate_pass "모든 docs/*.md 파일이 core_docs에 등록됨"
+    fi
+  fi
+
+  # MILESTONES 진행률 동기화 확인
+  if [ -f "$milestones_file" ]; then
+    local current_section
+    current_section=$(awk '/^## Current:/,/^---$/' "$milestones_file")
+    local total completed actual_progress stated_progress
+
+    total=$(echo "$current_section" | grep -c '\- \[.\]' || echo "0")
+    completed=$(echo "$current_section" | grep -c '\- \[x\]' || echo "0")
+
+    if [ "$total" -gt 0 ]; then
+      actual_progress=$((completed * 100 / total))
+    else
+      actual_progress=0
+    fi
+
+    stated_progress=$(echo "$current_section" | grep -oE 'Progress: [0-9]+%' | grep -oE '[0-9]+' || echo "0")
+
+    if [ "$actual_progress" -eq "$stated_progress" ]; then
+      validate_pass "MILESTONES 진행률 동기화됨 (${actual_progress}%)"
+    else
+      validate_warn "MILESTONES 진행률 불일치: 표기=${stated_progress}%, 실제=${actual_progress}%"
+    fi
+  fi
+
+  echo ""
+
+  # ============================================================
+  # 5. 중복/불필요 파일 검사 (Cleanup)
+  # ============================================================
+  echo -e "${BOLD}🧹 5. 중복/불필요 파일 검사${NC}"
+
+  local cleanup_issues=0
+
+  # 오래된 DRAFT 상태 PLAN 파일
+  if [ -d "$plans_dir" ]; then
+    for plan in "$plans_dir"/PLAN_*.md; do
+      [ ! -f "$plan" ] && continue
+
+      # ignore 파일 패턴 체크
+      if is_ignored_file "$plan"; then
+        continue
+      fi
+
+      if grep -q "status: DRAFT" "$plan" 2>/dev/null; then
+        local plan_mod_time
+        if [ "$OS_TYPE" = "macos" ]; then
+          plan_mod_time=$(stat -f "%m" "$plan" 2>/dev/null)
+        else
+          plan_mod_time=$(stat -c "%Y" "$plan" 2>/dev/null)
+        fi
+        if [ -n "$plan_mod_time" ]; then
+          local plan_age=$(( (now_time - plan_mod_time) / 86400 ))
+          if [ "$plan_age" -gt 14 ]; then
+            # old_drafts 규칙이 무시되지 않은 경우에만 경고
+            if ! is_ignored_rule "old_drafts"; then
+              validate_warn "$plan: DRAFT 상태로 ${plan_age}일 경과"
+              cleanup_issues=$((cleanup_issues + 1))
+            fi
+          fi
+        fi
+      fi
+    done
+  fi
+
+  # 비슷한 이름의 파일 감지 (docs 디렉토리)
+  if [ -d "docs" ]; then
+    local similar_files
+    similar_files=$(ls docs/*.md 2>/dev/null | xargs -I {} basename {} .md | sort | uniq -d)
+    if [ -n "$similar_files" ]; then
+      validate_warn "유사한 이름의 파일 발견: $similar_files"
+      cleanup_issues=$((cleanup_issues + 1))
+    fi
+  fi
+
+  # 임시/백업 파일
+  local temp_files
+  local temp_count=0
+  while IFS= read -r temp_file; do
+    [ -z "$temp_file" ] && continue
+    # ignore 파일 패턴 체크
+    if ! is_ignored_file "$temp_file"; then
+      temp_count=$((temp_count + 1))
+    fi
+  done < <(find . -maxdepth 2 \( -name "*.bak" -o -name "*~" -o -name "*.tmp" \) 2>/dev/null | head -10)
+
+  if [ "$temp_count" -gt 0 ]; then
+    # temp_files 규칙이 무시되지 않은 경우에만 경고
+    if ! is_ignored_rule "temp_files"; then
+      validate_warn "임시/백업 파일 발견 (${temp_count}개)"
+      cleanup_issues=$((cleanup_issues + 1))
+    fi
+  fi
+
+  if [ "$cleanup_issues" -eq 0 ]; then
+    validate_pass "정리가 필요한 파일 없음"
+  fi
+
+  echo ""
+
+  # ============================================================
+  # 6. 진행 상태 검증 (Progress)
+  # ============================================================
+  echo -e "${BOLD}📊 6. 진행 상태 검증${NC}"
+
+  if [ -f "$milestones_file" ]; then
+    local current_section
+    current_section=$(awk '/^## Current:/,/^---$/' "$milestones_file")
+
+    local milestone_name
+    milestone_name=$(echo "$current_section" | grep '## Current:' | sed 's/## Current:[[:space:]]*//')
+
+    local total completed remaining
+    total=$(echo "$current_section" | grep -c '\- \[.\]' || echo "0")
+    completed=$(echo "$current_section" | grep -c '\- \[x\]' || echo "0")
+    remaining=$((total - completed))
+
+    validate_info "현재 마일스톤: $milestone_name"
+    validate_info "태스크: $completed/$total 완료 ($remaining 남음)"
+
+    if [ "$total" -gt 0 ]; then
+      local progress=$((completed * 100 / total))
+      if [ "$progress" -ge 80 ]; then
+        validate_pass "진행률 양호: ${progress}%"
+      elif [ "$progress" -ge 50 ]; then
+        validate_info "진행률: ${progress}%"
+      else
+        validate_warn "진행률 저조: ${progress}%"
+      fi
+    fi
+
+    # 블로커 확인
+    local blockers
+    blockers=$(echo "$current_section" | awk '/^### Blockers/,/^###/' | grep -v "^###" | grep -v "^- None" | grep "^-" | wc -l | tr -d ' ')
+    if [ "$blockers" -gt 0 ]; then
+      validate_warn "${blockers}개 블로커 존재"
+    else
+      validate_pass "블로커 없음"
+    fi
+  fi
+
+  echo ""
+
+  # ============================================================
+  # 결과 요약
+  # ============================================================
+  echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo -e "${BOLD}  📋 검증 결과 요약${NC}"
+  echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo ""
+  echo -e "  ${GREEN}✓ 통과${NC}: $VALIDATE_PASSED"
+  echo -e "  ${YELLOW}⚠ 경고${NC}: $VALIDATE_WARNINGS"
+  echo -e "  ${RED}✗ 오류${NC}: $VALIDATE_ERRORS"
+  echo ""
+
+  if [ "$VALIDATE_ERRORS" -gt 0 ]; then
+    echo -e "  ${RED}상태: 오류 발견 — 수정이 필요합니다${NC}"
+    exit 1
+  elif [ "$VALIDATE_WARNINGS" -gt 0 ]; then
+    echo -e "  ${YELLOW}상태: 경고 있음 — 검토를 권장합니다${NC}"
+    exit 0
+  else
+    echo -e "  ${GREEN}상태: 모든 검증 통과${NC}"
+    exit 0
+  fi
+}
+
+# ============================================================
+# pm new-plan - 계획 문서 생성
+# ============================================================
+
+pm_new_plan() {
+  local name="$1"
+
+  if [ -z "$name" ]; then
+    pm_error "사용법: pm new-plan <name>"
+    exit 1
+  fi
+
+  require_project_yaml
+
+  local plans_dir
+  plans_dir=$(yaml_plans_dir)
+
+  ensure_dir "$plans_dir"
+
+  local safe_name
+  safe_name=$(slugify "$name")
+  local file="$plans_dir/PLAN_${safe_name}.md"
+
+  if [ -f "$file" ]; then
+    pm_error "파일이 이미 존재합니다: $file"
+    exit 1
+  fi
+
+  # 현재 마일스톤 가져오기
+  local milestone=""
+  local milestones_file
+  milestones_file=$(yaml_get_core_doc "progress")
+  if [ -f "$milestones_file" ]; then
+    milestone=$(grep '## Current:' "$milestones_file" | sed 's/## Current:[[:space:]]*//' | head -1)
+  fi
+
+  local title
+  title=$(echo "$name" | tr '-' ' ')
+
+  cat > "$file" << EOF
+---
+status: DRAFT
+created: $(get_date)
+updated: $(get_date)
+milestone: $milestone
+---
+
+# Plan: $title
+
+## Overview
+
+## Goals
+-
+
+## Approach
+
+## Tasks
+- [ ]
+
+## Dependencies
+
+## Notes
+EOF
+
+  pm_success "생성됨: $file"
+}
+
+# ============================================================
+# pm new-report - 보고서 생성
+# ============================================================
+
+pm_new_report() {
+  local topic="${1:-update}"
+  local type="${2:-implementation}"
+
+  require_project_yaml
+
+  local reports_dir
+  reports_dir=$(yaml_reports_dir)
+
+  ensure_dir "$reports_dir"
+
+  local safe_topic
+  safe_topic=$(slugify "$topic")
+  local file="$reports_dir/REPORT_$(get_date)_${safe_topic}.md"
+
+  if [ -f "$file" ]; then
+    pm_error "파일이 이미 존재합니다: $file"
+    exit 1
+  fi
+
+  # 현재 마일스톤 가져오기
+  local milestone=""
+  local milestones_file
+  milestones_file=$(yaml_get_core_doc "progress")
+  if [ -f "$milestones_file" ]; then
+    milestone=$(grep '## Current:' "$milestones_file" | sed 's/## Current:[[:space:]]*//' | head -1)
+  fi
+
+  cat > "$file" << EOF
+---
+date: $(get_date)
+type: $type
+milestone: $milestone
+---
+
+# Report: $topic
+
+## Summary
+
+## What Was Done
+
+## Results
+
+## Lessons Learned
+
+## Next Steps
+- [ ]
+EOF
+
+  pm_success "생성됨: $file (type: $type)"
+}
+
+# ============================================================
+# pm sync - 마일스톤 동기화
+# ============================================================
+
+pm_sync() {
+  require_project_yaml
+
+  pm_header "Milestone Sync"
+
+  local milestones_file
+  milestones_file=$(yaml_get_core_doc "progress")
+  milestones_file=${milestones_file:-MILESTONES.md}
+
+  if [ ! -f "$milestones_file" ]; then
+    pm_error "마일스톤 파일을 찾을 수 없음: $milestones_file"
+    exit 1
+  fi
+
+  # 현재 마일스톤에서 진행률 계산
+  local current_section
+  current_section=$(awk '/^## Current:/,/^---$/' "$milestones_file")
+
+  local total completed
+  total=$(echo "$current_section" | grep -c '\- \[.\]' || echo "0")
+  completed=$(echo "$current_section" | grep -c '\- \[x\]' || echo "0")
+
+  local progress=0
+  if [ "$total" -gt 0 ]; then
+    progress=$((completed * 100 / total))
+  fi
+
+  # Progress 업데이트
+  sed_inplace "s/Progress: [0-9]*%/Progress: $progress%/" "$milestones_file"
+
+  # Last updated 업데이트
+  sed_inplace "s/Last updated: [0-9-]*/Last updated: $(get_date)/" "$milestones_file"
+
+  pm_success "진행률 업데이트: $progress%"
+  pm_info "파일 업데이트: $milestones_file"
+}
+
+# ============================================================
+# 메인 라우터
+# ============================================================
+
+main() {
+  local command="${1:-help}"
+  shift 2>/dev/null || true
+
+  case "$command" in
+    init)       pm_init "$@" ;;
+    adopt)      pm_adopt "$@" ;;
+    status)     pm_status "$@" ;;
+    validate)   pm_validate "$@" ;;
+    new-plan)   pm_new_plan "$@" ;;
+    new-report) pm_new_report "$@" ;;
+    sync)       pm_sync "$@" ;;
+    help|--help|-h) pm_help ;;
+    *)
+      pm_error "알 수 없는 명령어: $command"
+      echo ""
+      pm_help
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

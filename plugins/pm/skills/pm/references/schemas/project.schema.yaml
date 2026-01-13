@@ -1,0 +1,164 @@
+# PROJECT.yaml Schema
+# 프로젝트 설정 파일 검증용 스키마
+
+# 이 스키마는 YAML 형식의 PROJECT.yaml 파일 구조를 정의합니다.
+# JSON Schema 호환 형식으로 작성되었습니다.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+title: "PROJECT.yaml Schema"
+description: "프로젝트 문서 관리 설정 파일 스키마"
+
+type: object
+
+required:
+  - name
+  - core_docs
+
+properties:
+  name:
+    type: string
+    description: "프로젝트 이름"
+    minLength: 1
+    pattern: "^[a-zA-Z0-9_-]+$"
+
+  description:
+    type: string
+    description: "프로젝트 설명"
+
+  core_docs:
+    type: object
+    description: "핵심 문서 정의"
+    required:
+      - vision
+      - progress
+    properties:
+      vision:
+        type: string
+        description: "프로젝트 비전/매니페스토 문서 경로"
+      progress:
+        type: string
+        description: "마일스톤/진행 상황 문서 경로"
+      architecture:
+        type: string
+        description: "아키텍처 문서 경로"
+      experiments:
+        type: string
+        description: "실험 기록 문서 경로"
+      domain_model:
+        type: string
+        description: "도메인 모델 문서 경로"
+      api_spec:
+        type: string
+        description: "API 명세 문서 경로"
+      theory:
+        type: string
+        description: "이론적 배경 문서 경로"
+      data_schema:
+        type: string
+        description: "데이터 스키마 문서 경로"
+      metrics:
+        type: string
+        description: "메트릭/평가 지표 문서 경로"
+      decisions:
+        type: string
+        description: "결정 기록(ADR) 문서 경로"
+    additionalProperties:
+      type: string
+      description: "사용자 정의 문서 역할"
+
+  plans_dir:
+    type: string
+    description: "계획 문서 디렉토리"
+    default: "docs/plans"
+
+  reports_dir:
+    type: string
+    description: "보고서 디렉토리"
+    default: "docs/reports"
+
+  ignore:
+    type: object
+    description: "검증에서 제외할 파일/규칙 정의"
+    properties:
+      files:
+        type: array
+        items:
+          type: string
+        description: |
+          검증에서 제외할 파일 패턴 (glob 형식)
+          예: "docs/archived/*", "*.bak", "docs/scratch/*.md"
+      rules:
+        type: array
+        items:
+          type: string
+          enum:
+            - unregistered_docs  # 미등록 문서 경고 무시
+            - stale_documents    # 오래된 문서 경고 무시
+            - old_drafts         # 오래된 DRAFT 경고 무시
+            - temp_files         # 임시/백업 파일 경고 무시
+        description: |
+          무시할 검증 규칙 목록
+          - unregistered_docs: docs/*.md 미등록 문서 경고 무시
+          - stale_documents: 30일 이상 미수정 문서 경고 무시
+          - old_drafts: 14일 이상 DRAFT 상태 PLAN 경고 무시
+          - temp_files: 임시/백업 파일 경고 무시
+
+  meta:
+    type: object
+    description: "프로젝트 메타데이터"
+    properties:
+      stack:
+        type: array
+        items:
+          type: string
+        description: "기술 스택 목록"
+      concerns:
+        type: array
+        items:
+          type: string
+        description: "주요 관심 영역"
+      created:
+        type: string
+        format: date
+        description: "생성일"
+      updated:
+        type: string
+        format: date
+        description: "수정일"
+    additionalProperties: true
+
+# 예시
+examples:
+  - name: "my-ml-project"
+    description: "ML 프로젝트 예시"
+    core_docs:
+      vision: "MANIFESTO.md"
+      progress: "MILESTONES.md"
+      architecture: "docs/ARCHITECTURE.md"
+      experiments: "docs/EXPERIMENTS.md"
+    plans_dir: "docs/plans"
+    reports_dir: "docs/reports"
+    meta:
+      stack: ["python", "pytorch", "fastapi"]
+      concerns: ["ml-experiments", "api-design"]
+
+  - name: "backend-project"
+    description: "ignore 필드 사용 예시"
+    core_docs:
+      vision: "MANIFESTO.md"
+      progress: "MILESTONES.md"
+      api_spec: "docs/API.md"
+    plans_dir: "docs/plans"
+    reports_dir: "docs/reports"
+    ignore:
+      files:
+        - "docs/archived/*"      # 아카이브된 문서 무시
+        - "docs/scratch/*.md"    # 스크래치 파일 무시
+        - "*.bak"                # 백업 파일 무시
+        - "DRAFT_*.md"           # DRAFT 접두사 파일 무시
+      rules:
+        - unregistered_docs      # 미등록 문서 경고 무시
+        - stale_documents        # 오래된 문서 경고 무시
+    meta:
+      stack: ["node", "express"]
+      created: "2024-01-13"
