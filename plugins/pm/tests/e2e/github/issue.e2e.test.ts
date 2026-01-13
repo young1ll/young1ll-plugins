@@ -12,17 +12,22 @@ import {
   getIssue,
 } from "../../../lib/github.js";
 import { GitHubE2EHelper } from "../helpers/github-helper.js";
+import { getE2EConfig } from "../config/env.js";
 
 describe("GitHub Issue E2E", () => {
   let helper: GitHubE2EHelper;
   let createdIssueNumber: number;
+  const config = getE2EConfig();
+  const skipWrite = config.github.skipWrite;
 
   beforeAll(() => {
     helper = new GitHubE2EHelper();
   });
 
   afterAll(() => {
-    helper.cleanupTestIssues();
+    if (!skipWrite) {
+      helper.cleanupTestIssues();
+    }
   });
 
   describe("Authentication", () => {
@@ -39,7 +44,7 @@ describe("GitHub Issue E2E", () => {
   });
 
   describe("Issue CRUD", () => {
-    it("creates a new test issue", () => {
+    it.skipIf(skipWrite)("creates a new test issue", () => {
       const issue = helper.createTestIssue(
         "Create Issue Test",
         "Testing issue creation via gh CLI"
@@ -52,7 +57,7 @@ describe("GitHub Issue E2E", () => {
       createdIssueNumber = issue.number;
     });
 
-    it("retrieves created issue via gh CLI", () => {
+    it.skipIf(skipWrite)("retrieves created issue via gh CLI", () => {
       const issue = helper.getIssue(createdIssueNumber);
 
       expect(issue).not.toBeNull();
@@ -60,7 +65,7 @@ describe("GitHub Issue E2E", () => {
       expect(issue?.state).toBe("open");
     });
 
-    it("retrieves issue via lib/github.ts", () => {
+    it.skipIf(skipWrite)("retrieves issue via lib/github.ts", () => {
       const issue = getIssue(createdIssueNumber);
 
       expect(issue).not.toBeNull();
@@ -69,14 +74,14 @@ describe("GitHub Issue E2E", () => {
       expect(issue?.state?.toLowerCase()).toBe("open");
     });
 
-    it("lists issues including test issue", () => {
+    it.skipIf(skipWrite)("lists issues including test issue", () => {
       const issues = listIssues({ state: "open", limit: 100 });
 
       const found = issues.find((i) => i.number === createdIssueNumber);
       expect(found).toBeDefined();
     });
 
-    it("adds comment to issue", () => {
+    it.skipIf(skipWrite)("adds comment to issue", () => {
       const result = helper.addComment(
         createdIssueNumber,
         "E2E test comment - automated testing"
@@ -85,7 +90,7 @@ describe("GitHub Issue E2E", () => {
       expect(result).toBe(true);
     });
 
-    it("closes issue", () => {
+    it.skipIf(skipWrite)("closes issue", () => {
       const result = helper.closeIssue(createdIssueNumber, "E2E test complete");
       expect(result).toBe(true);
 
@@ -93,7 +98,7 @@ describe("GitHub Issue E2E", () => {
       expect(issue?.state).toBe("closed");
     });
 
-    it("reopens issue", () => {
+    it.skipIf(skipWrite)("reopens issue", () => {
       const result = helper.reopenIssue(createdIssueNumber);
       expect(result).toBe(true);
 
@@ -102,7 +107,7 @@ describe("GitHub Issue E2E", () => {
     });
   });
 
-  describe("Issue Listing", () => {
+  describe.skipIf(skipWrite)("Issue Listing", () => {
     let listingIssues: number[] = [];
 
     beforeAll(() => {

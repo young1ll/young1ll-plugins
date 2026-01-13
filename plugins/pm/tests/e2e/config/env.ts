@@ -12,6 +12,7 @@ export interface E2EConfig {
     repo: string;
     testPrefix: string;
     cleanupAfter: boolean;
+    skipWrite: boolean;
   };
   git: {
     testBranchPrefix: string;
@@ -50,6 +51,7 @@ export function getE2EConfig(): E2EConfig {
       repo: process.env.E2E_GITHUB_REPO || "",
       testPrefix: process.env.E2E_GITHUB_TEST_PREFIX || "e2e-test-",
       cleanupAfter: process.env.E2E_GITHUB_CLEANUP_AFTER !== "false",
+      skipWrite: process.env.E2E_SKIP_GITHUB_WRITE === "true",
     },
     git: {
       testBranchPrefix: process.env.E2E_GIT_TEST_BRANCH_PREFIX || "e2e-test-",

@@ -19,8 +19,12 @@ import {
   handleTaskStatus,
   handleTaskList,
 } from "../../../mcp/lib/server-handlers.js";
+import { getE2EConfig } from "../config/env.js";
 
-describe("GitHub-Task Sync E2E", () => {
+const config = getE2EConfig();
+const skipWrite = config.github.skipWrite;
+
+describe.skipIf(skipWrite)("GitHub-Task Sync E2E", () => {
   let ctx: E2ETestContext;
   let repos: Repositories;
   let projectId: string;
