@@ -11,12 +11,14 @@
 --   - sprints         : Sprint entities
 --   - tasks           : Task entities (with seq for numeric ID)
 --   - velocity_history: Sprint velocity tracking
+--   - project_config  : GitHub integration settings (Phase 3)
 --
--- RESERVED (for future features - Phase 3+):
---   - task_dependencies  : Task dependency tracking
---   - git_events         : Git event tracking
---   - sync_queue         : Offline-first sync queue
---   - project_config     : GitHub integration settings
+-- RESERVED (for future features - Phase 4+):
+--   - commits            : Git commit tracking (Phase 4)
+--   - pull_requests      : PR tracking (Phase 4)
+--   - sync_queue         : Offline-first sync queue (Phase 5)
+--   - task_dependencies  : Task dependency tracking (Phase 6)
+--   - git_events         : Git event tracking (Phase 7)
 --   - code_analysis_cache: Code hotspot caching
 --   - releases           : Release management
 --   - estimation_accuracy: Reflexion learning
