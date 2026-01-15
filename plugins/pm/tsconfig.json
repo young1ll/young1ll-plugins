@@ -17,9 +17,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "noFallthroughCasesInSwitch": true
   },
   "include": [
     "mcp/**/*.ts",

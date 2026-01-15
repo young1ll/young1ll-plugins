@@ -7,15 +7,6 @@
       "env": {
         "PM_DB_PATH": "${PROJECT_ROOT}/.claude/pm.db"
       }
-    },
-    "pm-ml": {
-      "command": "python",
-      "args": ["-m", "pm_ml.server"],
-      "cwd": "${CLAUDE_PLUGIN_ROOT}/ml",
-      "env": {
-        "PM_DB_PATH": "${PROJECT_ROOT}/.claude/pm.db",
-        "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}/ml"
-      }
     }
   }
 }
